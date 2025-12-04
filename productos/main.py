@@ -1,6 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
-from productos.database import init_db
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# Importación de modelos y la conexión
+from productos.database import init_db, get_session
+from productos.models import Producto, ProductoCreate
 
 #Lifespan (Ciclo de vida): Código que corre antes de que la app empiece a recibir peticiones
 @asynccontextmanager
@@ -13,7 +18,35 @@ async def lifespan(app: FastAPI):
 # Instanciamos la app
 app = FastAPI(lifespan=lifespan)
 
+# --- ENDPOINTS ---
+
+# 1. Crear Producto
+# Usamos response_model=Producto para devolver el objeto COMPLETO (con ID) al usuario.
+@app.post("/productos", response_model=Producto)
+async def crear_producto(producto_data: ProductoCreate, session: AsyncSession = Depends(get_session)):
+    # Convertimos el modelo de entrada (ProductoCreate) al modelo de tabla (Producto)
+    nuevo_producto = Producto.model_validate(producto_data)
+
+    session.add(nuevo_producto)   # Agregamos a la sesión (memoria)
+    await session.commit()        # Guardamos en DBB (Confirmar cambios)
+    await session.refresh(nuevo_producto) # Recargamos el objeto para obtener el ID
+
+    return nuevo_producto
+
+# 2. Listar productos
+@app.get("/productos", response_model=list[Producto])
+async def listar_productos(session: AsyncSession = Depends(get_session)):
+    # Creamos la sentencia SQL: SELECT * FROM producto
+    statement = select(Producto)
+
+    # Ejecutamos la consulta de forma asíncrona
+    resultado = await session.execute(statement)
+
+    # .scalars() extrae el objeto de la tupla y .all() lo convierte en lista
+    return resultado.scalars().all()
+
+# 3. Leer raíz
 @app.get("/")
 def leer_raiz():
-    return {"mensaje" : "El servicio de productos esta activado" }
+    return {"mensaje" : "Hola, bienvenido al microservicio de productos" }
 

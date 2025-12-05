@@ -45,7 +45,17 @@ async def listar_productos(session: AsyncSession = Depends(get_session)):
     # .scalars() extrae el objeto de la tupla y .all() lo convierte en lista
     return resultado.scalars().all()
 
-# 3. Leer raíz
+@app.get("/productos/{producto_id}", response_model=Producto)
+async def leer_producto(producto_id: int, session: AsyncSession = Depends(get_session)):
+    # session.get es un atajo muy útil para buscar por primary Key
+    producto = await session.get(Producto, producto_id)
+
+    if not producto:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    return producto
+
+# 4. Leer raíz
 @app.get("/")
 def leer_raiz():
     return {"mensaje" : "Hola, bienvenido al microservicio de productos" }

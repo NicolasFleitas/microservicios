@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, status
 from contextlib import asynccontextmanager
 from sqlmodel import select
@@ -8,6 +10,8 @@ import httpx
 from inventario.database import init_db, get_session
 from inventario.models import Inventario, InventarioCreate, InventarioUpdate
 from inventario.dependencies import validar_token
+
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,7 +28,7 @@ async def crear_inventario(
     session: AsyncSession = Depends(get_session)
 ):
     # 1. VALIDACIÓN EXTERNA: Ver si existe el producto
-    headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
+    headers_seguridad = {"Authorization": "Bearer " + os.getenv("SECRET_KEY")}
     
     async with httpx.AsyncClient() as client:
         try:

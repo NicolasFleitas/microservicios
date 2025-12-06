@@ -1,9 +1,13 @@
+import os
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-security = HTTPBearer()
+load_dotenv()
 
-API_TOKEN_SECRETO = "clavesecreta123!"
+API_TOKEN_SECRETO = os.getenv("SECRET_KEY")
+
+security = HTTPBearer()
 
 async def validar_token(credenciales: HTTPAuthorizationCredentials = Depends(security)):
     """

@@ -1,3 +1,7 @@
+
+import os
+from dotenv import load_dotenv
+
 from fastapi import FastAPI, Depends, HTTPException
 from contextlib import asynccontextmanager
 from sqlmodel import select
@@ -7,6 +11,8 @@ import httpx
 from pedidos.database import init_db, get_session
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
 from pedidos.dependencies import validar_token
+
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,7 +28,7 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
 
     # 1. COMUNICACIÓN: Validar si el producto existe
     # Usamos un bloque 'async with' para abrir y cerrar la conexión eficientemente
-    headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
+    headers_seguridad = {"Authorization": "Bearer " + os.getenv("SECRET_KEY")}
     
     async with httpx.AsyncClient() as client:
         # 1.1 Validación: Ver que respondió el otro servicio (Productos)

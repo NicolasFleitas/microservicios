@@ -55,6 +55,29 @@ async def leer_producto(producto_id: int, session: AsyncSession = Depends(get_se
 
     return producto
 
+@app.put("/productos/{producto_id}", response_model=Producto)
+async def actualizar_producto(producto_id: int, producto_data: ProductoCreate, session: AsyncSession = Depends(get_session)):
+    # 1. Buscar el producto
+    producto_db = await session.get(Producto, producto_id)
+
+    if not producto_db:
+        HTTPException(status_code=404, detail="Producto no encontrado")
+    
+    # 2. Actualizar los campos
+    # Esto copia los datos de 'producto_data' dentro de 'producto_db'
+    producto_data_dict = producto_data.model_dump(exclude_unset=True)
+
+    for key, value in producto_data_dict.items():
+        setattr(producto_db, key, value)
+    
+    # 3. Guardar cambios
+    session.add(producto_db)
+    await session.commit()
+    await session.refresh(producto_db)
+
+    return producto_db
+
+
 # 4. Leer raíz
 @app.get("/")
 def leer_raiz():

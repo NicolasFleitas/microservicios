@@ -24,7 +24,7 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
     async with httpx.AsyncClient() as client:
         # 1.1 Validación: Ver que respondió el otro servicio (Productos)
         try: 
-            resp_pedido = await client.get(f"http://localhost:8001/productos/{pedido_data.producto_id}")            
+            resp_pedido = await client.get(f"http://127.0.0.1:8001/productos/{pedido_data.producto_id}")            
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="El servicio de Productos no responde")
 
@@ -43,7 +43,7 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
         # 2.1 Validación: Ver que respondió el otro servicio (Inventario)
         try:
             resp_inventario = await client.patch(
-                f"http://localhost:8002/inventario/{pedido_data.producto_id}",
+                f"http://127.0.0.1:8002/inventario/{pedido_data.producto_id}",
                 json=payload,
                 headers=headers_seguridad
             )

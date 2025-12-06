@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 class InventarioBase(SQLModel):
     cantidad: int
-    producto_id: int
+    producto_id: int = Field(unique=True)
 
 class Inventario(InventarioBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

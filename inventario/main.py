@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from contextlib import asynccontextmanager
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
 
 # Importación de modelos y la conexio
 from inventario.database import init_db, get_session
@@ -32,15 +33,32 @@ def validar_token(credenciales: HTTPAuthorizationCredentials = Depends(security)
     return token_recibido
 
 @app.post("/inventario", response_model=Inventario)
-async def crear_inventario(inventario_data: InventarioCreate, session: AsyncSession = Depends(get_session)):
-   
-    nuevo_inventario = Inventario.model_validate(inventario_data)
+async def crear_inventario(
+    inventario_data: InventarioCreate,
+    session: AsyncSession = Depends(get_session),
+    token: str = Depends(validar_token)
+):
+    # 1. VALIDACIÓN EXTERNA: Ver si existe el producto
+    async with httpx.AsyncClient() as client:
+        try:
+            # Llamamos al servicio de Productos
+            resp = await client.get(f"http://127.0.0.1:8001/productos/{inventario_data.producto_id}")
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="No se pudo verificar el producto. Servicio productos caído.")
+        
+        if resp.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"El producto ID {inventario_data.producto_id} no existe. No se puede crear inventario.")
 
-    session.add(nuevo_inventario)
-    await session.commit()
-    await session.refresh(nuevo_inventario)
-
-    return nuevo_inventario
+    # VALIDACIÓN DE DUPLICADOS (Manejo de error de BD)
+    try:
+        nuevo_inventario = Inventario.model_validate(inventario_data)
+        session.add(nuevo_inventario)
+        await session.commit()
+        await session.refresh(nuevo_inventario)
+        return nuevo_inventario
+    except Exception as e:
+        await session.rollback() # IMPORTANNTE: Limpiar la sesión si falla
+        raise HTTPException(status_code=400, detail="Ya existe un inventario para este producto ID")  
 
 @app.patch("/inventario/{producto_id}")
 async def actualizar_stock(producto_id: int, 

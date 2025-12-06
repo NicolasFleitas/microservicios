@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, Depends, HTTPException, status
 from contextlib import asynccontextmanager
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+security = HTTPBearer()
+
+TOKEN_SECRETO = "clavesecreta123!"
+
+def validar_token(credenciales: HTTPAuthorizationCredentials = Depends(security)):
+    token_recibido = credenciales.credentials
+    if token_recibido != TOKEN_SECRETO:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas. Acceso denegado.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token_recibido
+
 @app.post("/inventario", response_model=Inventario)
 async def crear_inventario(inventario_data: InventarioCreate, session: AsyncSession = Depends(get_session)):
    
@@ -28,7 +43,11 @@ async def crear_inventario(inventario_data: InventarioCreate, session: AsyncSess
     return nuevo_inventario
 
 @app.patch("/inventario/{producto_id}")
-async def actualizar_stock(producto_id: int, update_data: InventarioUpdate, session: AsyncSession = Depends(get_session)):
+async def actualizar_stock(producto_id: int, 
+    update_data: InventarioUpdate,
+    session: AsyncSession = Depends(get_session),
+    token: str = Depends(validar_token)
+):
     # 1. Buscar el inventario de ese producto
     # Nota: Asumo que producto_id es único en la tabla de inventario
     statement = select(Inventario).where(Inventario.producto_id == producto_id)

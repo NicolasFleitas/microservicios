@@ -9,7 +9,6 @@ class ProductoBase(SQLModel):
     nombre: str = Field(index=True)
     descripcion: str
     precio: float
-    stock: int
 
 # 2 Modelo para la Tabla (Hereda de Base): Agrega el ID
 class Producto(ProductoBase, table=True):

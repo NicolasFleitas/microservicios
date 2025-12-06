@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Importación de modelos y la conexión
+# Importaciones de dependencias y modelos 
 from productos.database import init_db, get_session
 from productos.models import Producto, ProductoCreate
+from productos.dependencies import validar_token
 
 #Lifespan (Ciclo de vida): Código que corre antes de que la app empiece a recibir peticiones
 @asynccontextmanager
@@ -16,7 +17,7 @@ async def lifespan(app: FastAPI):
     print("Cerrando la base de datos")
     
 # Instanciamos la app
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 
 # --- ENDPOINTS ---
 
@@ -65,7 +66,7 @@ async def actualizar_producto(producto_id: int, producto_data: ProductoCreate, s
     
     # 2. Actualizar los campos
     # Esto copia los datos de 'producto_data' dentro de 'producto_db'
-    producto_data_dict = producto_data.model_dump(exclude_unset=True)
+    producto_data_dict = producto_data.model_dump(exclude_unset=True) # exclude_unset=True excluye los campos que no se envían
 
     for key, value in producto_data_dict.items():
         setattr(producto_db, key, value)

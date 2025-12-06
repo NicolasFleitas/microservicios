@@ -1,4 +1,3 @@
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import FastAPI, Depends, HTTPException, status
 from contextlib import asynccontextmanager
 from sqlmodel import select
@@ -8,6 +7,7 @@ import httpx
 # Importación de modelos y la conexio
 from inventario.database import init_db, get_session
 from inventario.models import Inventario, InventarioCreate, InventarioUpdate
+from inventario.dependencies import validar_token
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,33 +16,23 @@ async def lifespan(app: FastAPI):
     yield
     print("Cerrando la base de datos Inventario")
 
-app = FastAPI(lifespan=lifespan)
-
-security = HTTPBearer()
-
-TOKEN_SECRETO = "clavesecreta123!"
-
-def validar_token(credenciales: HTTPAuthorizationCredentials = Depends(security)):
-    token_recibido = credenciales.credentials
-    if token_recibido != TOKEN_SECRETO:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales inválidas. Acceso denegado.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return token_recibido
+app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 
 @app.post("/inventario", response_model=Inventario)
 async def crear_inventario(
     inventario_data: InventarioCreate,
-    session: AsyncSession = Depends(get_session),
-    token: str = Depends(validar_token)
+    session: AsyncSession = Depends(get_session)
 ):
     # 1. VALIDACIÓN EXTERNA: Ver si existe el producto
+    headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
+    
     async with httpx.AsyncClient() as client:
         try:
             # Llamamos al servicio de Productos
-            resp = await client.get(f"http://127.0.0.1:8001/productos/{inventario_data.producto_id}")
+            resp = await client.get(
+                f"http://127.0.0.1:8001/productos/{inventario_data.producto_id}",
+                headers=headers_seguridad
+            )
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="No se pudo verificar el producto. Servicio productos caído.")
         
@@ -63,8 +53,7 @@ async def crear_inventario(
 @app.patch("/inventario/{producto_id}")
 async def actualizar_stock(producto_id: int, 
     update_data: InventarioUpdate,
-    session: AsyncSession = Depends(get_session),
-    token: str = Depends(validar_token)
+    session: AsyncSession = Depends(get_session)
 ):
     # 1. Buscar el inventario de ese producto
     # Nota: Asumo que producto_id es único en la tabla de inventario

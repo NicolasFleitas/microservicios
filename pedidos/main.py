@@ -6,6 +6,7 @@ import httpx
 
 from pedidos.database import init_db, get_session
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
+from pedidos.dependencies import validar_token
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,17 +15,22 @@ async def lifespan(app: FastAPI):
     yield
     print("Cerrando base de datos de pedidos")
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 
 @app.post("/pedidos", response_model=Pedido)
 async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depends(get_session)):
 
     # 1. COMUNICACIÓN: Validar si el producto existe
     # Usamos un bloque 'async with' para abrir y cerrar la conexión eficientemente
+    headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
+    
     async with httpx.AsyncClient() as client:
         # 1.1 Validación: Ver que respondió el otro servicio (Productos)
         try: 
-            resp_pedido = await client.get(f"http://127.0.0.1:8001/productos/{pedido_data.producto_id}")            
+            resp_pedido = await client.get(
+                f"http://127.0.0.1:8001/productos/{pedido_data.producto_id}",
+                headers=headers_seguridad
+            )            
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="El servicio de Productos no responde")
 
@@ -38,7 +44,6 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
         # 2. Restar stock en Inventario
         # Enviamos un PATCH con la cantidad que pide el usuario
         payload = {"cantidad": pedido_data.cantidad, "tipo_movimiento": "SALIDA"}
-        headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
         
         # 2.1 Validación: Ver que respondió el otro servicio (Inventario)
         try:

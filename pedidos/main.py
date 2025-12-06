@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
 from pedidos.database import init_db, get_session
-from pedidos.models import Pedido, PedidoCreate
+from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,5 +70,24 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
     await session.refresh(nuevo_pedido)
 
     return nuevo_pedido
+
+@app.patch("/pedidos/{pedido_id}", response_model=Pedido)
+async def modificar_pedido(pedido_id: int, pedido_data: PedidoUpdate, session: AsyncSession = Depends(get_session)):
+    """ Actualiza solamente el estado del pedido """
+    # 1. Buscar el pedido
+    pedido_db = await session.get(Pedido, pedido_id)
+
+    if not pedido_db:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+    # 2. Actualizar estado
+    pedido_db.estado = pedido_data.estado
+
+    session.add(pedido_db)
+    await session.commit()
+    await session.refresh(pedido_db)
+
+    return pedido_db
+
     
 

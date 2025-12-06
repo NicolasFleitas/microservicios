@@ -38,10 +38,15 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
         # 2. Restar stock en Inventario
         # Enviamos un PATCH con la cantidad que pide el usuario
         payload = {"cantidad": pedido_data.cantidad}
+        headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
         
         # 2.1 Validación: Ver que respondió el otro servicio (Inventario)
         try:
-            resp_inventario = await client.patch(f"http://localhost:8002/inventario/{pedido_data.producto_id}", json=payload)
+            resp_inventario = await client.patch(
+                f"http://localhost:8002/inventario/{pedido_data.producto_id}",
+                json=payload,
+                headers=headers_seguridad
+            )
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="El servicio de Inventario no responde")
     

@@ -69,3 +69,16 @@ async def actualizar_stock(producto_id: int,
 
     return inventario
 
+@app.get("/inventario/{producto_id}", response_model=Inventario)
+async def verificar_stock(producto_id: int, session: AsyncSession = Depends(get_session)):
+    # Busca por la columna producto_id, NO por la primary key de la tabla Inventario
+    statement = select(Inventario).where(Inventario.producto_id == producto_id)
+    resultado = await session.execute(statement)
+    inventario = resultado.scalars().first()
+
+    if not inventario:
+        raise HTTPException(status_code=404, detail="No existe inventario para este producto")
+    
+    return inventario
+
+

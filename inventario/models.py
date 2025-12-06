@@ -15,3 +15,4 @@ class InventarioCreate(InventarioBase):
 # Esquema simple solo para recibir cuánto restar
 class InventarioUpdate(BaseModel):
     cantidad: int
+    tipo_movimiento: str

@@ -37,7 +37,7 @@ async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depend
         
         # 2. Restar stock en Inventario
         # Enviamos un PATCH con la cantidad que pide el usuario
-        payload = {"cantidad": pedido_data.cantidad}
+        payload = {"cantidad": pedido_data.cantidad, "tipo_movimiento": "SALIDA"}
         headers_seguridad = {"Authorization": "Bearer clavesecreta123!"}
         
         # 2.1 Validación: Ver que respondió el otro servicio (Inventario)
@@ -79,6 +79,27 @@ async def modificar_pedido(pedido_id: int, pedido_data: PedidoUpdate, session: A
 
     if not pedido_db:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    
+    # LÓGICA DE COMPENSACIÓN
+    # Si el estado nuevo es CANCELADO y el estado anterior NO ERA Cancelado
+    if pedido_data.estado == "CANCELADO" and pedido_db.estado != "CANCELADO":
+        # Entonces devolvemos el stock al inventario
+        async with httpx.AsyncClient() as client:
+            payload = {
+                "cantidad": pedido_db.cantidad, # Devolvemos la cantidad que pidió
+                "tipo_movimiento": "ENTRADA"
+            }
+            headers = {"Authorization": "Bearer clavesecreta123!"}
+
+            try: 
+                # Llamamos a Inventario
+                resp = await client.patch(
+                    f"http://127.0.0.1:8002/inventario/{pedido_db.producto_id}",
+                    json=payload,
+                    headers=headers
+                )
+            except Exception as e:
+                print(f"ERROR CRÍTICO: No se pudo devolver el stock {e}")
 
     # 2. Actualizar estado
     pedido_db.estado = pedido_data.estado

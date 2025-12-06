@@ -58,11 +58,18 @@ async def actualizar_stock(producto_id: int,
         raise HTTPException(status_code=404, detail="Inventario no encontrado para este producto")
     
     # 2. Validar si hay suficiente stock
-    if inventario.cantidad < update_data.cantidad:
-        raise HTTPException(status_code=400, detail="Stock insuficiente")
     
-    # 3. Restar y guardar
-    inventario.cantidad -= update_data.cantidad
+    # 3. Cambiar cantidad depende del tipo movimiento
+    if update_data.tipo_movimiento == "SALIDA":
+        if inventario.cantidad < update_data.cantidad:
+            raise HTTPException(status_code=400, detail="Stock insuficiente")
+        inventario.cantidad -= update_data.cantidad
+
+    elif update_data.tipo_movimiento == "ENTRADA":
+        inventario.cantidad += update_data.cantidad
+    else:
+        raise HTTPException(status_code=400, detail="Tipo de movimiento no válido")
+
     session.add(inventario)
     await session.commit()
     await session.refresh(inventario)

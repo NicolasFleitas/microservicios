@@ -19,6 +19,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 
+@app.get("/pedidos", response_model=list[Pedido])
+async def listar_pedidos(session: AsyncSession = Depends(get_session)):
+    """ Lista todos los pedidos """
+    statement = select(Pedido)
+    resultado = await session.execute(statement)
+    
+    return resultado.scalars().all()
+
 @app.post("/pedidos", response_model=Pedido)
 async def crear_pedido(
         pedido_data: PedidoCreate,

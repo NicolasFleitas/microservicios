@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Importaciones de dependencias y modelos 
 from productos.database import init_db, get_session
-from productos.models import Producto, ProductoCreate
+from productos.models import Producto, ProductoCreate, ProductoUpdate
 from productos.dependencies import validar_token
 
 #Lifespan (Ciclo de vida): Código que corre antes de que la app empiece a recibir peticiones
@@ -56,8 +56,8 @@ async def leer_producto(producto_id: int, session: AsyncSession = Depends(get_se
 
     return producto
 
-@app.put("/productos/{producto_id}", response_model=Producto)
-async def actualizar_producto(producto_id: int, producto_data: ProductoCreate, session: AsyncSession = Depends(get_session)):
+@app.patch("/productos/{producto_id}", response_model=Producto)
+async def actualizar_producto(producto_id: int, producto_data: ProductoUpdate, session: AsyncSession = Depends(get_session)):
     # 1. Buscar el producto
     producto_db = await session.get(Producto, producto_id)
 

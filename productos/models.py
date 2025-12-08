@@ -19,3 +19,8 @@ class Producto(ProductoBase, table=True):
 
 class ProductoCreate(ProductoBase):
     pass
+
+class ProductoUpdate(ProductoBase):
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    precio: Optional[float] = None

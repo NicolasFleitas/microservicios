@@ -1,7 +1,4 @@
 
-import os
-from dotenv import load_dotenv
-
 from fastapi import FastAPI, Depends, HTTPException
 from contextlib import asynccontextmanager
 from sqlmodel import select
@@ -11,8 +8,7 @@ import httpx
 from pedidos.database import init_db, get_session
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
 from pedidos.dependencies import validar_token
-
-load_dotenv()
+from pedidos.services import PedidoService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,102 +20,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 
 @app.post("/pedidos", response_model=Pedido)
-async def crear_pedido(pedido_data: PedidoCreate, session: AsyncSession = Depends(get_session)):
-
-    # 1. COMUNICACIÓN: Validar si el producto existe
-    # Usamos un bloque 'async with' para abrir y cerrar la conexión eficientemente
-    headers_seguridad = {"Authorization": "Bearer " + os.getenv("SECRET_KEY")}
-    
-    async with httpx.AsyncClient() as client:
-        # 1.1 Validación: Ver que respondió el otro servicio (Productos)
-        try: 
-            resp_pedido = await client.get(
-                f"http://127.0.0.1:8001/productos/{pedido_data.producto_id}",
-                headers=headers_seguridad
-            )            
-        except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="El servicio de Productos no responde")
-
-        # 1.2 VALIDACIÓN: Ver que respondió el otro servicio (Productos)  
-        if resp_pedido.status_code == 404:
-            raise HTTPException(status_code=404, detail="El producto no existe, no se puede crear el pedido")
-
-        if resp_pedido.status_code != 200:
-            raise HTTPException(status_code=400, detail="Error al verificar el producto")
-        
-        # 2. Restar stock en Inventario
-        # Enviamos un PATCH con la cantidad que pide el usuario
-        payload = {"cantidad": pedido_data.cantidad, "tipo_movimiento": "SALIDA"}
-        
-        # 2.1 Validación: Ver que respondió el otro servicio (Inventario)
-        try:
-            resp_inventario = await client.patch(
-                f"http://127.0.0.1:8002/inventario/{pedido_data.producto_id}",
-                json=payload,
-                headers=headers_seguridad
-            )
-        except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="El servicio de Inventario no responde")
-    
-        # 2.2 Validación: Ver que respondió el otro servicio (Inventario)
-        if resp_inventario.status_code == 404:
-            raise HTTPException(status_code=404, detail="No se encontro el inventario para este producto")
-        
-        if resp_inventario.status_code == 400:
-            # Si responde 400 es porque no hay stock suficiente segun logica del codigo.
-            raise HTTPException(status_code=400, detail="No hay stock suficiente")
-        
-        if resp_inventario.status_code != 200:
-            raise HTTPException(status_code=resp_inventario.status_code, detail="Error en el servicio de inventario")
-    
-    # 3. Guardar el Pedido si todo lo anterior paso.
-    nuevo_pedido = Pedido.model_validate(pedido_data)
-    nuevo_pedido.estado = "PENDIENTE"
-    
-    session.add(nuevo_pedido)
-    await session.commit()
-    await session.refresh(nuevo_pedido)
-
-    return nuevo_pedido
+async def crear_pedido(
+        pedido_data: PedidoCreate,
+        session: AsyncSession = Depends(get_session)
+):
+    """ Crea un nuevo pedido """
+    # 1. Instanciamos el servicio pasándole la sesión de la DB
+    servicio = PedidoService(session) 
+    return await servicio.crear_pedido(pedido_data)
 
 @app.patch("/pedidos/{pedido_id}", response_model=Pedido)
 async def modificar_pedido(pedido_id: int, pedido_data: PedidoUpdate, session: AsyncSession = Depends(get_session)):
     """ Actualiza solamente el estado del pedido """
-    # 1. Buscar el pedido
-    pedido_db = await session.get(Pedido, pedido_id)
-
-    if not pedido_db:
-        raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    
-    # LÓGICA DE COMPENSACIÓN
-    # Si el estado nuevo es CANCELADO y el estado anterior NO ERA Cancelado
-    if pedido_data.estado == "CANCELADO" and pedido_db.estado != "CANCELADO":
-        # Entonces devolvemos el stock al inventario
-        async with httpx.AsyncClient() as client:
-            payload = {
-                "cantidad": pedido_db.cantidad, # Devolvemos la cantidad que pidió
-                "tipo_movimiento": "ENTRADA"
-            }
-            headers = {"Authorization": "Bearer clavesecreta123!"}
-
-            try: 
-                # Llamamos a Inventario
-                resp = await client.patch(
-                    f"http://127.0.0.1:8002/inventario/{pedido_db.producto_id}",
-                    json=payload,
-                    headers=headers
-                )
-            except Exception as e:
-                print(f"ERROR CRÍTICO: No se pudo devolver el stock {e}")
-
-    # 2. Actualizar estado
-    pedido_db.estado = pedido_data.estado
-
-    session.add(pedido_db)
-    await session.commit()
-    await session.refresh(pedido_db)
-
-    return pedido_db
+    servicio = PedidoService(session)
+    return await servicio.modificar_pedido(pedido_id, pedido_data)
 
     
 

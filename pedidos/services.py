@@ -29,81 +29,106 @@ class PedidoService:
     
     # LOGICA DE NEGOCIO
     async def crear_pedido(self, pedido_data: PedidoCreate):
-        """ Crea un pedido validando que el producto exista y que haya stock suficiente """
-        # Validar Producto
+        """ Crea un pedido orquestando validaciones, inventario y persistencia """
+        
+        # 1. Validar que el producto exista en el catálogo
+        await self._validar_producto(pedido_data.producto_id)
+        
+        # 2. Restar Stock en Inventario
+        await self._actualizar_stock(pedido_data.producto_id, pedido_data.cantidad, "SALIDA")
+        
+        # 3. Guardar pedido en DB local con manejo de errores (Compensación)
+        return await self._guardar_pedido_con_compensacion(pedido_data)
+
+    async def _validar_producto(self, producto_id: int):
         try:
-            resp_prod = await self._ejecutar_llamada_con_reintento(
-                "GET",
-                f"http://127.0.0.1:8001/productos/{pedido_data.producto_id}"
+            resp = await self._ejecutar_llamada_con_reintento(
+                "GET", 
+                f"http://127.0.0.1:8001/productos/{producto_id}"
             )
         except httpx.RequestError:
-            # Si tenacity se rinde después de 3 intentos, entra acá.
-            raise HTTPException(status_code=503, detail="Servicio de Productos no disponible (TimeOut)")
-        
-        if resp_prod.status_code == 404:
+            raise HTTPException(status_code=503, detail="Servicio de Productos no disponible")
+            
+        if resp.status_code == 404:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
-        
-        # Restar Stock (Servicio inventario)
-        payload = {"cantidad": pedido_data.cantidad, "tipo_movimiento": "SALIDA"}
-        try: 
-            resp_inv = await self._ejecutar_llamada_con_reintento(
+
+    async def _actualizar_stock(self, producto_id: int, cantidad: int, tipo_movimiento: str):
+        payload = {"cantidad": cantidad, "tipo_movimiento": tipo_movimiento}
+        try:
+            resp = await self._ejecutar_llamada_con_reintento(
                 "PATCH",
-                f"http://127.0.0.1:8002/inventario/{pedido_data.producto_id}",
+                f"http://127.0.0.1:8002/inventario/{producto_id}",
                 json=payload
             )
         except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="Servicio de inventario no disponible")
-        
-        if resp_inv.status_code != 200:
-            # Pasamos el error que nos dio el inventario (ej: Stock insuficiente)
-            raise HTTPException(status_code=resp_inv.status_code, detail=resp_inv.json().get("detail"))
-        
-        # Guardar pedido
+            raise HTTPException(status_code=503, detail="Servicio de Inventario no disponible")
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+
+    async def _guardar_pedido_con_compensacion(self, pedido_data: PedidoCreate):
         nuevo_pedido = Pedido.model_validate(pedido_data)
         nuevo_pedido.estado = "PENDIENTE"
-
         self.db.add(nuevo_pedido)
-        await self.db.commit()
-        await self.db.refresh(nuevo_pedido)
 
-        return nuevo_pedido
+        try:
+            await self.db.commit()
+            await self.db.refresh(nuevo_pedido)
+            return nuevo_pedido
+        except Exception:
+            await self.db.rollback()
+            # Si falla la BD, debemos devolver el stock que ya restamos
+            await self._compensar_stock(pedido_data.producto_id, pedido_data.cantidad)
+            raise HTTPException(status_code=500, detail="Error interno. Pedido revertido.")
+
+    async def _compensar_stock(self, producto_id: int, cantidad: int):
+        try:
+            # Reutilizamos la lógica de actualizar stock pero ignoramos errores HTTP
+            await self._actualizar_stock(producto_id, cantidad, "ENTRADA")
+        except HTTPException:            
+            print(f"CRITICO: Falló compensación de stock para producto {producto_id}")
 
     async def modificar_pedido(self, pedido_id: int, pedido_data: PedidoUpdate):
-        """ Modifica un pedido existente """
+        """ Modifica un pedido existente gestionando validaciones y stock """
         
-        pedido_db = await self.db.get(Pedido, pedido_id)
+        # 1. Obtener pedido
+        pedido_db = await self._obtener_pedido(pedido_id)
+        
+        # 2. Validar transición
+        self._validar_transicion_estado(pedido_db, pedido_data.estado)
 
-        if not pedido_db:
+        # 3. Gestionar SAGA (Devolución de stock si se cancela)
+        if self._es_cancelacion(pedido_db, pedido_data.estado):
+            # Reutilizamos _actualizar_stock para devolver ("ENTRADA")
+            await self._actualizar_stock(pedido_db.producto_id, pedido_db.cantidad, "ENTRADA")
+
+        # 4. Actualizar estado
+        return await self._actualizar_estado_pedido(pedido_db, pedido_data.estado)
+
+    async def _obtener_pedido(self, pedido_id: int) -> Pedido:
+        pedido = await self.db.get(Pedido, pedido_id)
+        if not pedido:
             raise HTTPException(status_code=404, detail="Pedido no encontrado")
-        
-        if pedido_data.estado == "COMPLETADO" and pedido_db.estado == "CANCELADO":
+        return pedido
+
+    def _validar_transicion_estado(self, pedido: Pedido, nuevo_estado: str):
+        if nuevo_estado not in ["PENDIENTE", "COMPLETADO", "CANCELADO"]:
+            raise HTTPException(status_code=400, detail="Estado inválido. Estados permitidos: PENDIENTE, COMPLETADO, CANCELADO")
+
+        if nuevo_estado == "COMPLETADO" and pedido.estado == "CANCELADO":
             raise HTTPException(status_code=400, detail="No se puede completar un pedido que ya está cancelado")
 
-        # LOGICA DE COMPENSACIÓN (PATRON SAGA)
-        
-        # Si se cancela un pedido que estaba pendiente, devolvemos el stock
-        if pedido_data.estado == "CANCELADO" and pedido_db.estado != "CANCELADO":
-            payload = {
-                "cantidad": pedido_db.cantidad, 
-                "tipo_movimiento": "ENTRADA"
-            }
-            try:                
-                resp_inventario = await self._ejecutar_llamada_con_reintento(
-                    "PATCH",
-                    f"http://127.0.0.1:8002/inventario/{pedido_db.producto_id}",
-                    json=payload
-                )
-            except httpx.RequestError:
-                raise HTTPException(status_code=503, detail="Error de conexión con Inventario (Compensación fallida)")
-            
-            if resp_inventario.status_code != 200:
-                raise HTTPException(status_code=resp_inventario.status_code, detail=f"Error en inventario: {resp_inventario.json().get('detail')}")
+        if nuevo_estado == "CANCELADO" and pedido.estado == "COMPLETADO":
+            raise HTTPException(status_code=400, detail="No se puede cancelar un pedido que ya está completado")
 
-        # Actualizar estado
-        pedido_db.estado = pedido_data.estado
-        self.db.add(pedido_db)
+    def _es_cancelacion(self, pedido: Pedido, nuevo_estado: str) -> bool:
+        return nuevo_estado == "CANCELADO" and pedido.estado != "CANCELADO"
+
+    async def _actualizar_estado_pedido(self, pedido: Pedido, nuevo_estado: str):
+        pedido.estado = nuevo_estado
+        self.db.add(pedido)
         await self.db.commit()
-        await self.db.refresh(pedido_db)
-        return pedido_db
+        await self.db.refresh(pedido)
+        return pedido
 
     

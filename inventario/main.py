@@ -6,7 +6,7 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
-# Importación de modelos y la conexio
+# Importación de modelos y la conexion
 from inventario.database import init_db, get_session
 from inventario.models import Inventario, InventarioCreate, InventarioUpdate
 from inventario.dependencies import validar_token
@@ -34,7 +34,7 @@ async def crear_inventario(
     inventario_data: InventarioCreate,
     session: AsyncSession = Depends(get_session)
 ):
-    # VALIDACIÓN EXTERNA: Ver si existe el producto
+    # VALIDACIÓN EXTERNA: Ver si existe el producto 
     headers_seguridad = {"Authorization": "Bearer " + os.getenv("SECRET_KEY")}
     
     async with httpx.AsyncClient() as client:

@@ -34,7 +34,7 @@ async def crear_inventario(
     inventario_data: InventarioCreate,
     session: AsyncSession = Depends(get_session)
 ):
-    # 1. VALIDACIÓN EXTERNA: Ver si existe el producto
+    # VALIDACIÓN EXTERNA: Ver si existe el producto
     headers_seguridad = {"Authorization": "Bearer " + os.getenv("SECRET_KEY")}
     
     async with httpx.AsyncClient() as client:
@@ -58,26 +58,25 @@ async def crear_inventario(
         await session.refresh(nuevo_inventario)
         return nuevo_inventario
     except Exception as e:
-        await session.rollback() # IMPORTANNTE: Limpiar la sesión si falla
+        await session.rollback() # IMPORTANTE: Limpiar la sesión si falla
         raise HTTPException(status_code=400, detail="Ya existe un inventario para este producto ID")  
 
+# ACTUALIZAR STOCK
 @app.patch("/inventario/{producto_id}")
 async def actualizar_stock(producto_id: int, 
     update_data: InventarioUpdate,
     session: AsyncSession = Depends(get_session)
 ):
-    # 1. Buscar el inventario de ese producto
-    # Nota: Asumo que producto_id es único en la tabla de inventario
+    # Buscar el inventario de ese producto
     statement = select(Inventario).where(Inventario.producto_id == producto_id)
     result = await session.execute(statement)
     inventario = result.scalars().first()
 
     if not inventario:
         raise HTTPException(status_code=404, detail="Inventario no encontrado para este producto")
+        
+    # Cambiar cantidad depende del tipo movimiento (SALIDA o ENTRADA) 
     
-    # 2. Validar si hay suficiente stock
-    
-    # 3. Cambiar cantidad depende del tipo movimiento
     if update_data.tipo_movimiento == "SALIDA":
         if inventario.cantidad < update_data.cantidad:
             raise HTTPException(status_code=400, detail="Stock insuficiente")
@@ -96,7 +95,7 @@ async def actualizar_stock(producto_id: int,
 
 @app.get("/inventario/{producto_id}", response_model=Inventario)
 async def verificar_stock(producto_id: int, session: AsyncSession = Depends(get_session)):
-    # Busca por la columna producto_id, NO por la primary key de la tabla Inventario
+    # Busca por la columna PRODUCTO_ID
     statement = select(Inventario).where(Inventario.producto_id == producto_id)
     resultado = await session.execute(statement)
     inventario = resultado.scalars().first()

@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 DATABASE_URL = "postgresql+asyncpg://postgres:penguin@localhost/tienda_pedidos"
 
 # El Motor. Es el coordinador de la conexión
-engine = create_async_engine(DATABASE_URL, echo=True, future=True)
+engine = create_async_engine(DATABASE_URL, future=True)
 
 # Función para inicializar la DB (Crear tablas)
 async def init_db():

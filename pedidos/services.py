@@ -1,12 +1,20 @@
 import os 
 import httpx
+import aiobreaker
+from datetime import timedelta
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
 
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+# Configuración de Circuit Breaker
+# fail_max = 5: Si ocurren 5 fallos consecutivos, el circuito se abre.
+# reset_timeout = 60: Espera 60 segundos antes de intentar conectar de nuevo (half-open)
+breaker_inventario = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
+breaker_productos = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
 
 class PedidoService:
     def __init__(self, db: AsyncSession):
@@ -14,19 +22,30 @@ class PedidoService:
         self.headers = {"Authorization": f"Bearer {SECRET_KEY}"}
     
     # ZONA DE RESILIENCIA
+    # CASO 1: Llamada a PRODUCTOS
+    @breaker_productos
     @retry(
-        stop=stop_after_attempt(3), # Intenta 3 veces
-        wait=wait_fixed(2), # Espera 2 segundos entre intentos
-        retry=retry_if_exception_type(httpx.RequestError),
-        reraise=True # Si falla 3 veces, lanza el error original
-    )
-    async def _ejecutar_llamada_con_reintento(self, method: str, url: str, json: dict = None):
+            stop=stop_after_attempt(3), # Intenta 3 veces
+            wait=wait_fixed(2), # Espera 2 segundos entre intentos
+            retry=retry_if_exception_type(httpx.RequestError),
+            reraise=True # Si falla 3 veces, lanza el error original
+        )
+    async def _llamada_productos(self, method: str, url: str):
         async with httpx.AsyncClient() as client:
-            if method == "GET":
-                return await client.get(url, headers=self.headers)
-            elif method == "PATCH":
-                return await client.patch(url, json=json, headers=self.headers)
+            return await client.request(method, url, headers=self.headers)
     
+    # CASO 2: Llamada a INVENTARIO
+    @breaker_inventario
+    @retry (
+            stop=stop_after_attempt(3),
+            wait=wait_fixed(2),
+            retry=retry_if_exception_type(httpx.RequestError),
+            reraise=True
+    )
+    async def _llamada_inventario(self, method: str, url: str, json: dict = None):
+        async with httpx.AsyncClient() as client:
+            return await client.request(method, url, json=json, headers=self.headers)
+
     # LOGICA DE NEGOCIO
     async def crear_pedido(self, pedido_data: PedidoCreate):
         """ Crea un pedido orquestando validaciones, inventario y persistencia """
@@ -42,26 +61,39 @@ class PedidoService:
 
     async def _validar_producto(self, producto_id: int):
         try:
-            resp = await self._ejecutar_llamada_con_reintento(
+            resp = await self._llamada_productos(
                 "GET", 
                 f"http://127.0.0.1:8001/productos/{producto_id}"
             )
+        except aiobreaker.CircuitBreakerError:
+            # Capturamos si el circuito esta abierto
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="El catálogo de productos no responde temporalmente (Circuit open)"
+            )
         except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="Servicio de Productos no disponible")
-            
+            raise HTTPException(status_code=503, detail="Error de conexión con Productos")
+
         if resp.status_code == 404:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
 
     async def _actualizar_stock(self, producto_id: int, cantidad: int, tipo_movimiento: str):
         payload = {"cantidad": cantidad, "tipo_movimiento": tipo_movimiento}
         try:
-            resp = await self._ejecutar_llamada_con_reintento(
+            resp = await self._llamada_inventario(
                 "PATCH",
                 f"http://127.0.0.1:8002/inventario/{producto_id}",
                 json=payload
             )
+        except aiobreaker.CircuitBreakerError:
+            raise HTTPException(
+                # Capturamos si el circuito esta abierto
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail= "El sistema de inventario no responde temporalmente (Circuit Open)."
+            )
         except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="Servicio de Inventario no disponible")
+            raise HTTPException(status_code=503,
+            detail="Servicio de Inventario no disponible")
 
         if resp.status_code != 200:
             raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))

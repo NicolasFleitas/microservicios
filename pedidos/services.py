@@ -15,6 +15,14 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 breaker_inventario = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
 breaker_productos = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
 
+# Configuración comun de Retry
+RETRY_POLICY = retry(
+    stop=stop_after_attempt(3), 
+    wait=wait_fixed(2), 
+    retry=retry_if_exception_type(httpx.RequestError),
+    reraise=True
+)
+
 # Configuración del logger
 logger = configurar_logger("PEDIDOS-SERVICE")
 
@@ -26,12 +34,7 @@ class PedidoService:
     # ZONA DE RESILIENCIA
     # CASO 1: Llamada a PRODUCTOS
     @breaker_productos
-    @retry(
-            stop=stop_after_attempt(3), # Intenta 3 veces
-            wait=wait_fixed(2), # Espera 2 segundos entre intentos
-            retry=retry_if_exception_type(httpx.RequestError),
-            reraise=True # Si falla 3 veces, lanza el error original
-        )
+    @RETRY_POLICY
     async def _llamada_productos(self, method: str, url: str):
         logger.info(f"Conectando con Productos -> {method} {url}")
         async with httpx.AsyncClient() as client:
@@ -39,12 +42,7 @@ class PedidoService:
     
     # CASO 2: Llamada a INVENTARIO
     @breaker_inventario
-    @retry (
-            stop=stop_after_attempt(3),
-            wait=wait_fixed(2),
-            retry=retry_if_exception_type(httpx.RequestError),
-            reraise=True
-    )
+    @RETRY_POLICY
     async def _llamada_inventario(self, method: str, url: str, json: dict = None):
         logger.info(f"Conectando con Inventario -> {method} {url}")
         async with httpx.AsyncClient() as client:

@@ -7,14 +7,16 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
+from pedidos.logger_config import configurar_logger
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # Configuración de Circuit Breaker
-# fail_max = 5: Si ocurren 5 fallos consecutivos, el circuito se abre.
-# reset_timeout = 60: Espera 60 segundos antes de intentar conectar de nuevo (half-open)
 breaker_inventario = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
 breaker_productos = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
+
+# Configuración del logger
+logger = configurar_logger("PEDIDOS-SERVICE")
 
 class PedidoService:
     def __init__(self, db: AsyncSession):
@@ -31,6 +33,7 @@ class PedidoService:
             reraise=True # Si falla 3 veces, lanza el error original
         )
     async def _llamada_productos(self, method: str, url: str):
+        logger.info(f"Conectando con Productos -> {method} {url}")
         async with httpx.AsyncClient() as client:
             return await client.request(method, url, headers=self.headers)
     
@@ -43,22 +46,31 @@ class PedidoService:
             reraise=True
     )
     async def _llamada_inventario(self, method: str, url: str, json: dict = None):
+        logger.info(f"Conectando con Inventario -> {method} {url}")
         async with httpx.AsyncClient() as client:
             return await client.request(method, url, json=json, headers=self.headers)
 
-    # LOGICA DE NEGOCIO
+    # LOGICA DE NEGOCIO - CREAR PEDIDO
     async def crear_pedido(self, pedido_data: PedidoCreate):
         """ Crea un pedido orquestando validaciones, inventario y persistencia """
-        
-        # 1. Validar que el producto exista en el catálogo
-        await self._validar_producto(pedido_data.producto_id)
-        
-        # 2. Restar Stock en Inventario
-        await self._actualizar_stock(pedido_data.producto_id, pedido_data.cantidad, "SALIDA")
-        
-        # 3. Guardar pedido en DB local con manejo de errores (Compensación)
-        return await self._guardar_pedido_con_compensacion(pedido_data)
 
+        logger.info(f"Inicio de proceso de pedido. ProductoID: {pedido_data.producto_id}")
+        try:
+            # 1. Validar que el producto exista en el catálogo
+            await self._validar_producto(pedido_data.producto_id)
+            
+            # 2. Restar Stock en Inventario
+            await self._actualizar_stock(pedido_data.producto_id, pedido_data.cantidad, "SALIDA")
+            
+            # 3. Guardar pedido en DB local con manejo de errores (Compensación)
+            resultado = await self._guardar_pedido_con_compensacion(pedido_data)
+            logger.info(f"Pedido {resultado.id} creado exitosamente.")
+            return resultado
+        except Exception as e:
+            # LOG DE ERROR CRITICO
+            logger.error(f"Error al crear pedido: {str(e)}")
+            raise e
+    
     async def _validar_producto(self, producto_id: int):
         try:
             resp = await self._llamada_productos(
@@ -118,12 +130,14 @@ class PedidoService:
             # Reutilizamos la lógica de actualizar stock pero ignoramos errores HTTP
             await self._actualizar_stock(producto_id, cantidad, "ENTRADA")
         except HTTPException:            
-            print(f"CRITICO: Falló compensación de stock para producto {producto_id}")
+            logger.critical(f"CRITICO: Falló compensación de stock para producto {producto_id} con cantidad: {cantidad}")
 
+    # LOGICA DE NEGOCIO - MODIFICAR PEDIDO
     async def modificar_pedido(self, pedido_id: int, pedido_data: PedidoUpdate):
         """ Modifica un pedido existente gestionando validaciones y stock """
         
         # 1. Obtener pedido
+        logger.info(f"Modificando pedido {pedido_id} -> Nuevo Estado: {pedido_data.estado}")
         pedido_db = await self._obtener_pedido(pedido_id)
         
         # 2. Validar transición
@@ -135,7 +149,9 @@ class PedidoService:
             await self._actualizar_stock(pedido_db.producto_id, pedido_db.cantidad, "ENTRADA")
 
         # 4. Actualizar estado
-        return await self._actualizar_estado_pedido(pedido_db, pedido_data.estado)
+        pedido_actualizado = await self._actualizar_estado_pedido(pedido_db, pedido_data.estado)
+        logger.info(f"Pedido {pedido_id} actualizado correctamente a {pedido_data.estado}")
+        return pedido_actualizado
 
     async def _obtener_pedido(self, pedido_id: int) -> Pedido:
         pedido = await self.db.get(Pedido, pedido_id)
@@ -159,8 +175,13 @@ class PedidoService:
     async def _actualizar_estado_pedido(self, pedido: Pedido, nuevo_estado: str):
         pedido.estado = nuevo_estado
         self.db.add(pedido)
-        await self.db.commit()
-        await self.db.refresh(pedido)
-        return pedido
+        try:
+            await self.db.commit()
+            await self.db.refresh(pedido)
+            return pedido
+        except Exception as e:
+            logger.error(f"Error crítico DB al actualizar estado del pedido {pedido.id} a '{nuevo_estado}': {str(e)}")
+            await self.db.rollback()
+            raise HTTPException(status_code=500, detail="Error interno al actualizar estado del pedido")
 
     

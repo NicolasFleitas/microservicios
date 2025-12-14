@@ -6,8 +6,10 @@ import contextlib
 from datetime import timedelta
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 from fastapi import HTTPException, status
+from inventario.logger_config import configurar_logger
 
 SECRET_KEY = os.getenv("SECRET_KEY")
+logger = configurar_logger("INVENTARIO-CLIENTS")
 
 # --- CONFIGURACIÓN DE RESILIENCIA ---
 breaker_productos = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
@@ -46,6 +48,7 @@ class ProductoClient(BaseClient):
     @breaker_productos
     @RETRY_POLICY
     async def check_producto_exists(self, producto_id: int):
+        logger.info(f"Verificando existencia en Productos -> GET {self.BASE_URL}/{producto_id}")
         async with self._control_errores("Productos"):
             async with httpx.AsyncClient() as client:
                 resp = await client.get(

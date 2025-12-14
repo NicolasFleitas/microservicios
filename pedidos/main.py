@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, Depends, HTTPException
 from contextlib import asynccontextmanager
 from sqlmodel import select
@@ -19,14 +18,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 
-@app.get("/pedidos", response_model=list[Pedido])
-async def listar_pedidos(session: AsyncSession = Depends(get_session)):
-    """ Lista todos los pedidos """
-    statement = select(Pedido)
-    resultado = await session.execute(statement)
-    
-    return resultado.scalars().all()
-
 @app.post("/pedidos", response_model=Pedido)
 async def crear_pedido(
         pedido_data: PedidoCreate,
@@ -37,11 +28,16 @@ async def crear_pedido(
     servicio = PedidoService(session) 
     return await servicio.crear_pedido(pedido_data)
 
+@app.get("/pedidos", response_model=list[Pedido])
+async def listar_pedidos(session: AsyncSession = Depends(get_session)):
+    """ Lista todos los pedidos """
+    statement = select(Pedido)
+    resultado = await session.execute(statement)
+    
+    return resultado.scalars().all()
+
 @app.patch("/pedidos/{pedido_id}", response_model=Pedido)
 async def modificar_pedido(pedido_id: int, pedido_data: PedidoUpdate, session: AsyncSession = Depends(get_session)):
     """ Actualiza solamente el estado del pedido """
     servicio = PedidoService(session)
     return await servicio.modificar_pedido(pedido_id, pedido_data)
-
-    
-

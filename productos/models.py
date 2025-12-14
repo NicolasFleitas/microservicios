@@ -3,7 +3,7 @@ from sqlmodel import Field, SQLModel
 
 # Clase Base: Contiene los campos comunes
 class ProductoBase(SQLModel):
-    nombre: str = Field(index=True)
+    nombre: str = Field(index=True, unique=True)
     descripcion: str
     precio: float
 

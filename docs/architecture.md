@@ -29,8 +29,9 @@ graph TD
     User -->|Token + Request| Inv
     User -->|Token + Request| Ped
     
-    Ped -->|HTTP /gRPC| Inv
-    Ped -->|HTTP /gRPC| Prod
+    Ped -->|HTTP| Inv
+    Ped -->|HTTP| Prod
+    Inv -->|HTTP| Prod
     
     Auth --> DB_Auth
     Prod --> DB_Prod
@@ -56,6 +57,7 @@ graph TD
 - Mantiene el conteo actual de stock por producto.
 - Maneja la reserva y decremento de stock al realizarse un pedido.
 - Expone endpoints para verificar disponibilidad.
+- **Comunicación**: Consulta al servicio de Productos para validar la existencia de un producto al momento de crear su inventario.
 
 ### 4. Servicio de Pedidos (`pedidos`)
 **Responsabilidad**: Orquestación de compras.

@@ -1,16 +1,15 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import httpx
-import jwt
 
 # Importación de modelos y la conexion
 from inventario.database import init_db, get_session
 from inventario.models import Inventario, InventarioCreate, InventarioUpdate
 from inventario.dependencies import validar_token
+from inventario.services import InventarioService
 
 load_dotenv()
 
@@ -21,8 +20,23 @@ async def lifespan(app: FastAPI):
     yield
     print("Cerrando la base de datos Inventario")
 
-app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
+app = FastAPI(
+    dependencies=[Depends(validar_token)], 
+    lifespan=lifespan
+)
 
+# --- ENDPOINTS ---
+
+# 1. Crear (POST /inventario)
+@app.post("/inventario", response_model=Inventario)
+async def crear_inventario(
+    inventario_data: InventarioCreate,
+    session: AsyncSession = Depends(get_session)
+):
+    servicio = InventarioService(session)
+    return await servicio.crear_inventario(inventario_data)
+
+# 2. Listar (GET /inventario)
 @app.get("/inventario", response_model=list[Inventario])
 async def listar_inventario(session: AsyncSession = Depends(get_session)):
     statement = select(Inventario)
@@ -30,81 +44,17 @@ async def listar_inventario(session: AsyncSession = Depends(get_session)):
 
     return resultado.scalars().all()
 
-@app.post("/inventario", response_model=Inventario)
-async def crear_inventario(
-    inventario_data: InventarioCreate,
-    session: AsyncSession = Depends(get_session)
-):
-    # VALIDACIÓN EXTERNA: Ver si existe el producto 
-    token = jwt.encode({"sub": "sistema-inventario"}, os.getenv("SECRET_KEY"), algorithm="HS256")
-    headers_seguridad = {"Authorization": f"Bearer {token}"}
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            # Llamamos al servicio de Productos
-            resp = await client.get(
-                f"http://127.0.0.1:8001/productos/{inventario_data.producto_id}",
-                headers=headers_seguridad
-            )
-        except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="No se pudo verificar el producto. Servicio productos caído.")
-        
-        if resp.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"El producto ID {inventario_data.producto_id} no existe. No se puede crear inventario.")
+# 3. Leer Uno (GET /inventario/{id})
+@app.get("/inventario/{producto_id}", response_model=Inventario)
+async def verificar_stock(producto_id: int, session: AsyncSession = Depends(get_session)):
+    servicio = InventarioService(session)
+    return await servicio.verificar_stock(producto_id)
 
-    # VALIDACIÓN DE DUPLICADOS (Manejo de error de BD)
-    try:
-        nuevo_inventario = Inventario.model_validate(inventario_data)
-        session.add(nuevo_inventario)
-        await session.commit()
-        await session.refresh(nuevo_inventario)
-        return nuevo_inventario
-    except Exception as e:
-        await session.rollback() # IMPORTANTE: Limpiar la sesión si falla
-        raise HTTPException(status_code=400, detail="Ya existe un inventario para este producto ID")  
-
-# ACTUALIZAR STOCK
+# 4. Actualizar (PATCH /inventario/{id})
 @app.patch("/inventario/{producto_id}")
 async def actualizar_stock(producto_id: int, 
     update_data: InventarioUpdate,
     session: AsyncSession = Depends(get_session)
 ):
-    # Buscar el inventario de ese producto
-    statement = select(Inventario).where(Inventario.producto_id == producto_id)
-    result = await session.execute(statement)
-    inventario = result.scalars().first()
-
-    if not inventario:
-        raise HTTPException(status_code=404, detail="Inventario no encontrado para este producto")
-        
-    # Cambiar cantidad depende del tipo movimiento (SALIDA o ENTRADA) 
-    
-    if update_data.tipo_movimiento == "SALIDA":
-        if inventario.cantidad < update_data.cantidad:
-            raise HTTPException(status_code=400, detail="Stock insuficiente")
-        inventario.cantidad -= update_data.cantidad
-
-    elif update_data.tipo_movimiento == "ENTRADA":
-        inventario.cantidad += update_data.cantidad
-    else:
-        raise HTTPException(status_code=400, detail="Tipo de movimiento no válido")
-
-    session.add(inventario)
-    await session.commit()
-    await session.refresh(inventario)
-
-    return inventario
-
-@app.get("/inventario/{producto_id}", response_model=Inventario)
-async def verificar_stock(producto_id: int, session: AsyncSession = Depends(get_session)):
-    # Busca por la columna PRODUCTO_ID
-    statement = select(Inventario).where(Inventario.producto_id == producto_id)
-    resultado = await session.execute(statement)
-    inventario = resultado.scalars().first()
-
-    if not inventario:
-        raise HTTPException(status_code=404, detail="No existe inventario para este producto")
-    
-    return inventario
-
-
+    servicio = InventarioService(session)
+    return await servicio.actualizar_stock(producto_id, update_data)

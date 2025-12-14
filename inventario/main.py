@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
+import jwt
 
 # Importación de modelos y la conexion
 from inventario.database import init_db, get_session
@@ -35,7 +36,8 @@ async def crear_inventario(
     session: AsyncSession = Depends(get_session)
 ):
     # VALIDACIÓN EXTERNA: Ver si existe el producto 
-    headers_seguridad = {"Authorization": "Bearer " + os.getenv("SECRET_KEY")}
+    token = jwt.encode({"sub": "sistema-inventario"}, os.getenv("SECRET_KEY"), algorithm="HS256")
+    headers_seguridad = {"Authorization": f"Bearer {token}"}
     
     async with httpx.AsyncClient() as client:
         try:

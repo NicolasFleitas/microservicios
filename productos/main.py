@@ -78,9 +78,3 @@ async def actualizar_producto(producto_id: int, producto_data: ProductoUpdate, s
 
     return producto_db
 
-
-# 4. Leer raíz
-@app.get("/")
-def leer_raiz():
-    return {"mensaje" : "Hola, bienvenido al microservicio de productos" }
-

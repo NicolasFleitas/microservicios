@@ -1,5 +1,6 @@
 import os
 import httpx
+import jwt
 import aiobreaker
 import contextlib
 from datetime import timedelta
@@ -23,7 +24,9 @@ RETRY_POLICY = retry(
 
 class BaseClient:
     def __init__(self):
-        self.headers = {"Authorization": f"Bearer {SECRET_KEY}"}
+        # Generar token de sistema para llamadas internas
+        token = jwt.encode({"sub": "sistema-pedidos"}, SECRET_KEY, algorithm="HS256")
+        self.headers = {"Authorization": f"Bearer {token}"}
 
     @contextlib.asynccontextmanager
     async def _control_errores(self, nombre_servicio: str):

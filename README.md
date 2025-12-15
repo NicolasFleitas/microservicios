@@ -9,7 +9,8 @@ Este repositorio contiene una arquitectura de microservicios desarrollada con **
 - **Asincronía**: Uso de `async`/`await` para operaciones I/O eficientes.
 - **SQLModel & SQLAlchemy**: ORM moderno y tipado.
 - **Autenticación JWT**: Seguridad centralizada en un servicio de Auth.
-- **Resiliencia**: Implementación de patrones como Circuit Breaker (con `pybreaker`/`aiobreaker`).
+- **Resiliencia**: Circuit Breaker (`aiobreaker`) + Retry Policy (`tenacity`) para tolerancia a fallos.
+
 
 ## 🏗️ Servicios
 

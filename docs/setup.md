@@ -14,20 +14,12 @@ SECRET_KEY=tu_clave_secreta_super_segura
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# Bases de Datos (Ejemplo con PostgreSQL)
-# Formato: postgresql+asyncpg://user:password@host:port/dbname
-
-# Base de datos Auth
-DATABASE_URL_AUTH=postgresql+asyncpg://postgres:password@localhost:5432/tienda_auth
-
-# Base de datos Productos
-DATABASE_URL_PRODUCTOS=postgresql+asyncpg://postgres:password@localhost:5432/tienda_productos
-
-# Base de datos Inventario
-DATABASE_URL_INVENTARIO=postgresql+asyncpg://postgres:password@localhost:5432/tienda_inventario
-
-# Base de datos Pedidos
-DATABASE_URL_PEDIDOS=postgresql+asyncpg://postgres:password@localhost:5432/tienda_pedidos
+# Bases de Datos (Opcional - si no se definen, usa SQLite automáticamente)
+# Formato PostgreSQL: postgresql+asyncpg://user:password@host:port/dbname
+AUTH_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_auth
+PRODUCTOS_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_productos
+INVENTARIO_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_inventario
+PEDIDOS_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_pedidos
 
 # URLs de Servicios (Para comunicación entre ellos)
 AUTH_SERVICE_URL=http://localhost:8000
@@ -38,7 +30,15 @@ PEDIDOS_SERVICE_URL=http://localhost:8003
 
 ## 2. Bases de Datos
 
-El sistema está diseñado para funcionar con **PostgreSQL**. Antes de iniciar los servicios, debes asegurarte de que:
+### Modo Desarrollo (SQLite - Por defecto)
+
+El sistema está configurado para usar **SQLite automáticamente** cuando no se especifican las variables de entorno de base de datos. Esto permite iniciar el desarrollo inmediatamente sin necesidad de configurar PostgreSQL.
+
+> **💡 Tip**: Si no defines las variables `*_DB_URL`, cada microservicio creará automáticamente su archivo SQLite local (ej: `auth.db`, `productos.db`, etc.).
+
+### Modo Producción (PostgreSQL)
+
+Para entornos de producción, el sistema está diseñado para funcionar con **PostgreSQL**. Antes de iniciar los servicios, debes asegurarte de que:
 
 1.  El servidor PostgreSQL esté corriendo.
 2.  Las bases de datos existan (`tienda_auth`, `tienda_productos`, etc.).
@@ -52,7 +52,16 @@ CREATE DATABASE tienda_inventario;
 CREATE DATABASE tienda_pedidos;
 ```
 
-*Nota: Los microservicios utilizan SQLModel/SQLAlchemy e intentarán crear las tablas automáticamente al iniciarse (`init_db`), pero la base de datos en sí debe existir previamente.*
+Luego configura las variables de entorno correspondientes en tu archivo `.env`:
+
+```ini
+AUTH_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_auth
+PRODUCTOS_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_productos
+INVENTARIO_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_inventario
+PEDIDOS_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_pedidos
+```
+
+*Nota: Los microservicios utilizan SQLModel/SQLAlchemy e intentarán crear las tablas automáticamente al iniciarse (`init_db`), pero la base de datos PostgreSQL en sí debe existir previamente.*
 
 ## 3. Instalación de Dependencias
 

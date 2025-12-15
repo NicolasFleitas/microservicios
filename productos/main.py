@@ -18,7 +18,11 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
     
 # Instanciamos la app
-app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
+app = FastAPI(
+    title="Productos Service",
+    dependencies=[Depends(validar_token)],
+    lifespan=lifespan
+)
 
 # --- ENDPOINTS ---
 

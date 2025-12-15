@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
     print("Cerrando base de datos de autenticacion")
     await engine.dispose()
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(title="Auth Service", lifespan=lifespan)
 
 @app.post("/register", response_model=Usuario)
 async def register(usuario: UsuarioCreate, session: AsyncSession = Depends(get_session)):

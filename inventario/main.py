@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 app = FastAPI(
+    title="Inventario Service",
     dependencies=[Depends(validar_token)], 
     lifespan=lifespan
 )

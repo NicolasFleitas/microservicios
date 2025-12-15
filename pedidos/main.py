@@ -17,7 +17,10 @@ async def lifespan(app: FastAPI):
     print("Cerrando base de datos de pedidos")
     await engine.dispose()
 
-app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
+app = FastAPI(
+    title="Pedidos Service",
+    dependencies=[Depends(validar_token)],
+    lifespan=lifespan)
 
 @app.post("/pedidos", response_model=Pedido)
 async def crear_pedido(

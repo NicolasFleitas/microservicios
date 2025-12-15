@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 class PedidoBase(SQLModel):
     producto_id: int
-    cantidad: int
+    cantidad: int = Field(gt=0)
     estado: str = Field(default="Pendiente")
 
 class Pedido(PedidoBase, table=True):

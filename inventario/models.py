@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Field
 from pydantic import BaseModel
 
 class InventarioBase(SQLModel):
-    cantidad: int
+    cantidad: int = Field(gt=0)
     producto_id: int = Field(unique=True)
 
 class Inventario(InventarioBase, table=True):
@@ -14,5 +14,5 @@ class InventarioCreate(InventarioBase):
 
 # Esquema simple solo para recibir cuánto restar
 class InventarioUpdate(BaseModel):
-    cantidad: int
+    cantidad: int = Field(gt=0)
     tipo_movimiento: str

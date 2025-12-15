@@ -6,7 +6,7 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Importación de modelos y la conexion
-from inventario.database import init_db, get_session
+from inventario.database import init_db, get_session, engine
 from inventario.models import Inventario, InventarioCreate, InventarioUpdate
 from inventario.dependencies import validar_token
 from inventario.services import InventarioService
@@ -19,6 +19,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     print("Cerrando la base de datos Inventario")
+    await engine.dispose()
 
 app = FastAPI(
     dependencies=[Depends(validar_token)], 

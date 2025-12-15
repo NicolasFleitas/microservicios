@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Importaciones de dependencias y modelos 
-from productos.database import init_db, get_session
+from productos.database import init_db, get_session, engine
 from productos.models import Producto, ProductoCreate, ProductoUpdate
 from productos.dependencies import validar_token
 from productos.services import ProductoService
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
     await init_db() # Se crean las tablas
     yield
     print("Cerrando la base de datos")
+    await engine.dispose()
     
 # Instanciamos la app
 app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)

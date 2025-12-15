@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 
-from auth.database import init_db, get_session
+from auth.database import init_db, get_session, engine
 from auth.models import Usuario
 from auth.schemas import UsuarioCreate, UsuarioLogin, Token
 from auth.security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     print("Cerrando base de datos de autenticacion")
+    await engine.dispose()
 
 app = FastAPI(lifespan=lifespan)
 

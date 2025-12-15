@@ -4,7 +4,7 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
-from pedidos.database import init_db, get_session
+from pedidos.database import init_db, get_session, engine
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
 from pedidos.dependencies import validar_token
 from pedidos.services import PedidoService
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     print("Cerrando base de datos de pedidos")
+    await engine.dispose()
 
 app = FastAPI(dependencies=[Depends(validar_token)], lifespan=lifespan)
 

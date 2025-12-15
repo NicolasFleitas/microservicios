@@ -36,7 +36,8 @@ class BaseClient:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"El sistema de {nombre_servicio} no responde temporalmente (Circuit Open)."
             )
-        except httpx.RequestError:
+        except httpx.RequestError as e:
+            logger.error(f"RequestError en {nombre_servicio}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Error de conexión con {nombre_servicio}"

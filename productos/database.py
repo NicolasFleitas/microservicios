@@ -1,9 +1,14 @@
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # URL de conexión.
-DATABASE_URL = "postgresql+asyncpg://postgres:penguin@localhost/tienda_productos"
+# Intenta obtener la URL de postgres, si no la encuentra usa sqlite
+DATABASE_URL = os.getenv("PRODUCTOS_DB_URL", "sqlite+aiosqlite:///productos.db")
 
 # El Motor. Es el coordinador de la conexión
 engine = create_async_engine(DATABASE_URL, future=True) # future=True es para que use la sintaxis de SQLModel

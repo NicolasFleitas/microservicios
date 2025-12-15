@@ -2,17 +2,22 @@ import os
 import httpx
 import jwt
 import aiobreaker
-import contextlib
 from datetime import timedelta
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from inventario.logger_config import configurar_logger
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 logger = configurar_logger("INVENTARIO-CLIENTS")
 
 # --- CONFIGURACIÓN DE RESILIENCIA ---
-breaker_productos = aiobreaker.CircuitBreaker(fail_max=5, timeout_duration=timedelta(seconds=60))
+# El breaker excluye HTTPException porque son errores de negocio (404, 400, etc.)
+# Solo los errores de conexión (httpx.RequestError) deberían abrir el circuito
+breaker_productos = aiobreaker.CircuitBreaker(
+    fail_max=5, 
+    timeout_duration=timedelta(seconds=60),
+    exclude=[HTTPException]  # No contar errores de negocio como fallos
+)
 
 RETRY_POLICY = retry(
     stop=stop_after_attempt(3), 
@@ -27,21 +32,6 @@ class BaseClient:
         token = jwt.encode({"sub": service_name_sub}, SECRET_KEY, algorithm="HS256")
         self.headers = {"Authorization": f"Bearer {token}"}
 
-    @contextlib.asynccontextmanager
-    async def _control_errores(self, nombre_servicio: str):
-        try:
-            yield
-        except aiobreaker.CircuitBreakerError:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"El sistema de {nombre_servicio} no responde temporalmente (Circuit Open)."
-            )
-        except httpx.RequestError as e:
-            logger.error(f"RequestError en {nombre_servicio}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Error de conexión con {nombre_servicio}"
-            )
 
 class ProductoClient(BaseClient):
     BASE_URL = "http://127.0.0.1:8001/productos"
@@ -49,13 +39,16 @@ class ProductoClient(BaseClient):
     @breaker_productos
     @RETRY_POLICY
     async def check_producto_exists(self, producto_id: int):
+        """
+        Verifica si un producto existe en el servicio de Productos.
+        Los errores se propagan al servicio para manejo centralizado.
+        """
         logger.info(f"Verificando existencia en Productos -> GET {self.BASE_URL}/{producto_id}")
-        async with self._control_errores("Productos"):
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.BASE_URL}/{producto_id}",
-                    headers=self.headers
-                )
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.BASE_URL}/{producto_id}",
+                headers=self.headers
+            )
         
         if resp.status_code == 404:
             raise HTTPException(
@@ -63,3 +56,4 @@ class ProductoClient(BaseClient):
                 detail=f"El producto ID {producto_id} no existe. No se puede crear inventario."
             )
         return True
+

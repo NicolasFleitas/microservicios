@@ -1,5 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+import aiobreaker
+import httpx
 
 from pedidos.models import Pedido, PedidoCreate, PedidoUpdate
 from pedidos.logger_config import configurar_logger
@@ -30,10 +32,25 @@ class PedidoService:
             resultado = await self._guardar_pedido_con_compensacion(pedido_data)
             logger.info(f"Pedido {resultado.id} creado exitosamente.")
             return resultado
+        except aiobreaker.CircuitBreakerError as e:
+            logger.warning(f"Circuit Breaker abierto: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Uno de los servicios externos no está disponible temporalmente. Por favor, intente de nuevo más tarde."
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Error de conexión con servicio externo: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Error de conexión con los servicios externos."
+            )
+        except HTTPException:
+            # Re-lanzar HTTPExceptions sin modificar (ej: 404 Producto no encontrado)
+            raise
         except Exception as e:
             # LOG DE ERROR CRITICO
-            logger.error(f"Error al crear pedido: {str(e)}")
-            raise e
+            logger.error(f"Error inesperado al crear pedido: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error interno al procesar el pedido")
     
     async def _guardar_pedido_con_compensacion(self, pedido_data: PedidoCreate):
         nuevo_pedido = Pedido.model_validate(pedido_data)
@@ -79,9 +96,23 @@ class PedidoService:
             logger.info(f"Pedido {pedido_id} actualizado correctamente a {pedido_data.estado}")
             return pedido_actualizado
 
+        except aiobreaker.CircuitBreakerError as e:
+            logger.warning(f"Circuit Breaker abierto al modificar pedido: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="El servicio de Inventario no responde temporalmente (Circuit Open). Intente más tarde."
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Error de conexión con Inventario: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Error de conexión con el servicio de Inventario."
+            )
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error al modificar pedido {pedido_id}: {str(e)}")
-            raise e
+            logger.error(f"Error inesperado al modificar pedido {pedido_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error interno al modificar el pedido")
 
     async def _obtener_pedido(self, pedido_id: int) -> Pedido:
         pedido = await self.db.get(Pedido, pedido_id)

@@ -1,6 +1,8 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+import aiobreaker
+import httpx
 
 from inventario.models import Inventario, InventarioCreate, InventarioUpdate
 from inventario.clients import ProductoClient
@@ -17,7 +19,20 @@ class InventarioService:
     async def crear_inventario(self, inventario_data: InventarioCreate) -> Inventario:
         logger.info(f"Inicio creación de inventario. ProductoID: {inventario_data.producto_id}")
         # 1. Validar que el producto existe en el otro servicio
-        await self.producto_client.check_producto_exists(inventario_data.producto_id)
+        try:
+            await self.producto_client.check_producto_exists(inventario_data.producto_id)
+        except aiobreaker.CircuitBreakerError:
+            logger.warning(f"Circuit Breaker abierto para servicio de Productos")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="El sistema de Productos no responde temporalmente (Circuit Open). Intente más tarde."
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Error de conexión con servicio de Productos: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Error de conexión con el servicio de Productos."
+            )
 
         # 2. Guardar en DB
         try:

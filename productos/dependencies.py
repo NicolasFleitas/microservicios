@@ -8,8 +8,11 @@ load_dotenv()
 
 security = HTTPBearer()
 
-API_TOKEN_SECRETO = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "secreto_super_seguro"
+)  # Fallback inseguro si no hay env
 ALGORITHM = "HS256"
+
 
 async def validar_token(credenciales: HTTPAuthorizationCredentials = Depends(security)):
     """
@@ -24,11 +27,11 @@ async def validar_token(credenciales: HTTPAuthorizationCredentials = Depends(sec
     )
 
     try:
-        payload = jwt.decode(token_recibido, API_TOKEN_SECRETO, algorithms=[ALGORITHM])
+        payload = jwt.decode(token_recibido, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise exception_auth
     except jwt.InvalidTokenError:
         raise exception_auth
-    
+
     return token_recibido

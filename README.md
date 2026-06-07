@@ -96,6 +96,59 @@ Para información más detallada, consulta la carpeta `docs/`:
 - [Guía de Configuración y Despliegue](docs/setup.md)
 - [Referencia de API](docs/api_reference.md)
 
+## 🐳 Docker
+
+### Construir las imágenes Docker
+
+Cada microservicio tiene su propio Dockerfile. Para construir las imágenes, ejecuta los siguientes comandos desde la raíz del proyecto:
+
+```bash
+# Construir imagen del servicio Auth
+docker build -f Dockerfile.auth -t ecommerce-auth .
+
+# Construir imagen del servicio Productos
+docker build -f Dockerfile.productos -t ecommerce-productos .
+
+# Construir imagen del servicio Inventario
+docker build -f Dockerfile.inventario -t ecommerce-inventario .
+
+# Construir imagen del servicio Pedidos
+docker build -f Dockerfile.pedidos -t ecommerce-pedidos .
+```
+
+### Ejecutar los contenedores
+
+Puedes ejecutar cada servicio en un contenedor separado. Asegúrate de que los puertos estén disponibles:
+
+```bash
+# Ejecutar servicio Auth (puerto 8000)
+docker run -d --name auth-service -p 8000:8000 ecommerce-auth
+
+# Ejecutar servicio Productos (puerto 8001)
+docker run -d --name productos-service -p 8001:8001 ecommerce-productos
+
+# Ejecutar servicio Inventario (puerto 8002)
+docker run -d --name inventario-service -p 8002:8002 ecommerce-inventario
+
+# Ejecutar servicio Pedidos (puerto 8003)
+docker run -d --name pedidos-service -p 8003:8003 ecommerce-pedidos
+```
+
+### Detener y eliminar contenedores
+
+```bash
+docker stop auth-service productos-service inventario-service pedidos-service
+docker rm auth-service productos-service inventario-service pedidos-service
+```
+
+### Ejecutar todo con Docker Compose (Opcional)
+
+Si prefieres usar Docker Compose para orquestar todos los servicios, puedes crear un archivo `docker-compose.yml` en la raíz del proyecto y ejecutar:
+
+```bash
+docker-compose up -d
+```
+
 ## 🤝 Contribución
 
 1.  Haz un Fork del proyecto.

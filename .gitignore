@@ -1,5 +1,31 @@
-.venv
-__pycache__
+# Entorno virtual y dependencias de Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configuración local / Credenciales
 .env
-logs
+.env.local
+.env.*.local
+
+# Bases de datos locales (SQLite)
 *.db
+*.sqlite
+*.sqlite3
+
+# Logs y archivos temporales
+*.log
+*.tmp
+*.swp
+*.swo
+
+# IDEs y Editores de código
+.vscode/
+.idea/
+
+# Sistema Operativo
+.DS_Store
+Thumbs.db

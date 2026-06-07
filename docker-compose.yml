@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      # La base de datos por defecto no se usa realmente, creamos las nuestras con init.sql
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: ./auth
+    container_name: auth-service
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-tu_clave_secreta_super_segura}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - AUTH_DB_URL=postgresql+asyncpg://postgres:password@postgres:5432/tienda_auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  productos-service:
+    build:
+      context: ./productos
+    container_name: productos-service
+    ports:
+      - "8001:8001"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-tu_clave_secreta_super_segura}
+      - PRODUCTOS_DB_URL=postgresql+asyncpg://postgres:password@postgres:5432/tienda_productos
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  inventario-service:
+    build:
+      context: ./inventario
+    container_name: inventario-service
+    ports:
+      - "8002:8002"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-tu_clave_secreta_super_segura}
+      - INVENTARIO_DB_URL=postgresql+asyncpg://postgres:password@postgres:5432/tienda_inventario
+      - PRODUCTOS_SERVICE_URL=http://productos-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      productos-service:
+        condition: service_started
+
+  pedidos-service:
+    build:
+      context: ./pedidos
+    container_name: pedidos-service
+    ports:
+      - "8003:8003"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-tu_clave_secreta_super_segura}
+      - PEDIDOS_DB_URL=postgresql+asyncpg://postgres:password@postgres:5432/tienda_pedidos
+      - PRODUCTOS_SERVICE_URL=http://productos-service:8001
+      - INVENTARIO_SERVICE_URL=http://inventario-service:8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      productos-service:
+        condition: service_started
+      inventario-service:
+        condition: service_started
+
+volumes:
+  postgres_data:

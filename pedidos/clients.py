@@ -39,7 +39,10 @@ class BaseClient:
 
 
 class ProductoClient(BaseClient):
-    BASE_URL = "http://127.0.0.1:8001/productos"
+    def __init__(self):
+        super().__init__()
+        self.productos_url = os.getenv("PRODUCTOS_SERVICE_URL", "http://127.0.0.1:8001")
+        self.BASE_URL = f"{self.productos_url}/productos"
 
     @breaker_productos
     @RETRY_POLICY
@@ -58,7 +61,10 @@ class ProductoClient(BaseClient):
 
 
 class InventarioClient(BaseClient):
-    BASE_URL = "http://127.0.0.1:8002/inventario"
+    def __init__(self):
+        super().__init__()
+        self.inventario_url = os.getenv("INVENTARIO_SERVICE_URL", "http://127.0.0.1:8002")
+        self.BASE_URL = f"{self.inventario_url}/inventario"
 
     @breaker_inventario
     @RETRY_POLICY

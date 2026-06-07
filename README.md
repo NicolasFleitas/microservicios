@@ -96,6 +96,84 @@ Para información más detallada, consulta la carpeta `docs/`:
 - [Guía de Configuración y Despliegue](docs/setup.md)
 - [Referencia de API](docs/api_reference.md)
 
+## 🐳 Docker y Docker Compose
+
+La forma más sencilla y profesional de ejecutar todo el ecosistema (incluyendo una base de datos PostgreSQL con bases de datos lógicas individuales para cada servicio) es utilizando **Docker Compose**.
+
+### Prerrequisitos para Docker
+* Tener instalado [Docker Desktop](https://www.docker.com/products/docker-desktop/) (que incluye Docker Compose).
+
+### Ejecutar con Docker Compose (Recomendado)
+
+1. **Configurar el entorno**:
+   Copia el archivo de plantilla `.env.example` a `.env` en la raíz del proyecto para definir las claves por defecto (opcional, Docker Compose usa valores seguros por defecto si no se define):
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Levantar todo el ecosistema**:
+   Ejecuta el siguiente comando en la raíz del proyecto para construir las imágenes de los microservicios y levantar los contenedores en segundo plano:
+   ```bash
+   docker-compose up --build -d
+   ```
+
+3. **Verificar el estado de los contenedores**:
+   ```bash
+   docker-compose ps
+   ```
+
+4. **Acceder a los servicios**:
+   Una vez levantados, puedes acceder a la documentación interactiva (Swagger UI) de cada servicio en tu navegador:
+   * **Auth Service**: [http://localhost:8000/docs](http://localhost:8000/docs)
+   * **Productos Service**: [http://localhost:8001/docs](http://localhost:8001/docs)
+   * **Inventario Service**: [http://localhost:8002/docs](http://localhost:8002/docs)
+   * **Pedidos Service**: [http://localhost:8003/docs](http://localhost:8003/docs)
+
+5. **Detener el entorno**:
+   Para detener y eliminar los contenedores, volúmenes de datos y la red interna creada:
+   ```bash
+   docker-compose down -v
+   ```
+
+---
+
+### Construir y ejecutar contenedores manualmente (Opcional - Usando SQLite)
+
+Si prefieres no usar la base de datos PostgreSQL de Docker Compose y quieres probar los servicios de forma individual usando SQLite:
+
+#### 1. Construir las imágenes individuales
+Navega al directorio de cada servicio para construir su imagen:
+```bash
+# Auth
+cd auth && docker build -t ecommerce-auth . && cd ..
+
+# Productos
+cd productos && docker build -t ecommerce-productos . && cd ..
+
+# Inventario
+cd inventario && docker build -t ecommerce-inventario . && cd ..
+
+# Pedidos
+cd pedidos && docker build -t ecommerce-pedidos . && cd ..
+```
+
+#### 2. Ejecutar los contenedores por separado
+```bash
+docker run -d --name auth-service -p 8000:8000 ecommerce-auth
+docker run -d --name productos-service -p 8001:8001 ecommerce-productos
+docker run -d --name inventario-service -p 8002:8002 ecommerce-inventario
+docker run -d --name pedidos-service -p 8003:8003 ecommerce-pedidos
+```
+
+> **Nota**: Para que los microservicios se comuniquen entre sí manualmente sin Docker Compose, deberás configurar las variables de entorno `PRODUCTOS_SERVICE_URL` e `INVENTARIO_SERVICE_URL` apuntando al host (`http://host.docker.internal:<puerto>`) o a sus IPs respectivas.
+
+### Detener y eliminar contenedores manuales
+
+```bash
+docker stop auth-service productos-service inventario-service pedidos-service
+docker rm auth-service productos-service inventario-service pedidos-service
+```
+
 ## 🤝 Contribución
 
 1.  Haz un Fork del proyecto.

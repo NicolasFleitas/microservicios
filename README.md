@@ -114,12 +114,12 @@ La forma más sencilla y profesional de ejecutar todo el ecosistema (incluyendo 
 2. **Levantar todo el ecosistema**:
    Ejecuta el siguiente comando en la raíz del proyecto para construir las imágenes de los microservicios y levantar los contenedores en segundo plano:
    ```bash
-   docker-compose up --build -d
+   docker compose up --build -d
    ```
 
 3. **Verificar el estado de los contenedores**:
    ```bash
-   docker-compose ps
+   docker compose ps
    ```
 
 4. **Acceder a los servicios**:
@@ -132,8 +132,31 @@ La forma más sencilla y profesional de ejecutar todo el ecosistema (incluyendo 
 5. **Detener el entorno**:
    Para detener y eliminar los contenedores, volúmenes de datos y la red interna creada:
    ```bash
-   docker-compose down -v
+   docker compose down -v
    ```
+
+### En GitHub Codespaces
+
+El repositorio incluye `.devcontainer/devcontainer.json`, así que al abrir un codespace:
+
+- Se instala Docker (docker-in-docker) con el plugin `docker compose` v2.
+- `postStartCommand` levanta el stack automáticamente (`docker compose up --build -d`).
+- Los puertos **8000, 8001, 8002, 8003 y 5432** quedan declarados en `forwardPorts`, por lo que aparecen en el panel **PORTS** y se reenvían solos.
+
+Los servicios se abren en el navegador a través del reenvío de Codespaces:
+
+* **Auth Service**: `https://<codespace>-8000.app.github.dev/docs`
+* **Productos Service**: `https://<codespace>-8001.app.github.dev/docs`
+* **Inventario Service**: `https://<codespace>-8002.app.github.dev/docs`
+* **Pedidos Service**: `https://<codespace>-8003.app.github.dev/docs`
+
+Utilidades útiles dentro del codespace:
+
+```bash
+docker compose ps                 # estado de los contenedores
+docker compose logs -f auth-service
+docker compose up --build -d      # (re)levantar todo
+```
 
 ---
 

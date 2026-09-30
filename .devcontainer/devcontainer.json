@@ -1,0 +1,27 @@
+{
+  "name": "microservicios",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": true,
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  "forwardPorts": [8000, 8001, 8002, 8003, 5432],
+  "portsAttributes": {
+    "8000": { "label": "Auth", "onAutoForward": "notify" },
+    "8001": { "label": "Productos", "onAutoForward": "notify" },
+    "8002": { "label": "Inventario", "onAutoForward": "notify" },
+    "8003": { "label": "Pedidos", "onAutoForward": "notify" },
+    "5432": { "label": "Postgres", "onAutoForward": "silent" }
+  },
+  "postStartCommand": "docker compose up --build -d",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-containers"
+      ]
+    }
+  }
+}

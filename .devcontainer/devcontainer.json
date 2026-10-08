@@ -2,12 +2,14 @@
   "name": "microservicios",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "moby": true,
       "dockerDashComposeVersion": "v2"
     }
   },
   "forwardPorts": [8000, 8001, 8002, 8003, 5432],
+  "hostRequirements": { "cpus": 4, "memory": "8gb", "storage": "32gb" },
+  "shutdownAction": "stopCompose",
   "portsAttributes": {
     "8000": { "label": "Auth", "onAutoForward": "notify" },
     "8001": { "label": "Productos", "onAutoForward": "notify" },
@@ -15,7 +17,7 @@
     "8003": { "label": "Pedidos", "onAutoForward": "notify" },
     "5432": { "label": "Postgres", "onAutoForward": "silent" }
   },
-  "postStartCommand": "for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; echo \"waiting for docker daemon... ($i)\"; sleep 2; done; docker compose up --build -d",
+  "postStartCommand": "cd ${containerWorkspaceFolder} && command -v docker >/dev/null || exit 1; docker compose version >/dev/null || exit 1; for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done; docker info >/dev/null 2>&1 || exit 1; docker compose up --build -d && docker compose ps",
   "customizations": {
     "vscode": {
       "extensions": [

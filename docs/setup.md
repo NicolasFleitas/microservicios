@@ -68,7 +68,10 @@ PEDIDOS_DB_URL=postgresql+asyncpg://postgres:password@localhost:5432/tienda_pedi
 Asegúrate de estar en el directorio raíz y tener tu entorno virtual activo:
 
 ```bash
-pip install -r requirements.txt
+pip install -r auth/requirements.txt
+pip install -r productos/requirements.txt
+pip install -r inventario/requirements.txt
+pip install -r pedidos/requirements.txt
 ```
 
 ## 4. Ejecución en Desarrollo

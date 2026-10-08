@@ -15,7 +15,7 @@
     "8003": { "label": "Pedidos", "onAutoForward": "notify" },
     "5432": { "label": "Postgres", "onAutoForward": "silent" }
   },
-  "postStartCommand": "docker compose up --build -d",
+  "postStartCommand": "for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; echo \"waiting for docker daemon... ($i)\"; sleep 2; done; docker compose up --build -d",
   "customizations": {
     "vscode": {
       "extensions": [
